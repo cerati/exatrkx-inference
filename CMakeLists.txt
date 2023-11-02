@@ -1,8 +1,8 @@
 # ======================================================================
-#  exatrkx-inference main build file
+#  exatrkxinference main build file
 #
 #  cd .../path/to/build/directory
-#  source .../path/to/exatrkx-inference/ups/setup_for_development <-d|-p>
+#  source .../path/to/exatrkxinference/ups/setup_for_development <-d|-p>
 #  cmake [-DCMAKE_INSTALL_PREFIX=/install/path]
 #        -DCMAKE_BUILD_TYPE=$CETPKG_TYPE
 #        $CETPKG_SOURCE
@@ -16,7 +16,7 @@
 # use cmake 3.12 or later
 cmake_minimum_required (VERSION 3.12)
 
-project(exatrkx-inference LANGUAGES CXX C)
+project(exatrkxinference LANGUAGES CXX C)
 
 # cetbuildtools contains our cmake modules
 find_package(cetbuildtools REQUIRED)
@@ -53,7 +53,7 @@ include(BuildPlugins)
 # add cet_find_library commands here when needed
 
 # ADD SOURCE CODE SUBDIRECTORIES HERE
-add_subdirectory(exatrkx-inference)
+add_subdirectory(exatrkxinference)
 
 # tests
 add_subdirectory(test)
