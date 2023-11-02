@@ -18,6 +18,7 @@ simple_plugin(TestInference "module"
     cetlib_except
     ${ROOT_BASIC_LIB_LIST}
     lardataobj_RecoBase
+    torch
 )
 
 simple_plugin(PandoraNuSliceHitsProducer "module"

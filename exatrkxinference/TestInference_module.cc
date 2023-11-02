@@ -24,6 +24,8 @@
 
 #include "delaunator.hpp"
 
+#include <torch/script.h>
+
 using std::array;
 using std::vector;
 using recob::Hit;
@@ -188,13 +190,27 @@ void TestInference::analyze(art::Event const& e)
   //   edge_idx_nexus[p].insert(edge_idx_nexus[p].end()-1, edgen3D[p].begin(),edgen3D[p].end());
   // }
 
+  std::string planes[3] = {"u","v","y"};
+
+  auto x = torch::Dict<std::string, torch::Tensor>();
+  auto batch = torch::Dict<std::string, torch::Tensor>();
   for (size_t p=0;p<3;p++) {
     std::cout << "plane=" << p << std::endl;
+    long int dim = nodeft[p].size()/4;
+    torch::Tensor ix = torch::zeros({dim,4});
     for (size_t n=0;n<nodeft[p].size();n=n+4) {
       std::cout << nodeft[p][n] << " " << nodeft[p][n+1] << " " << nodeft[p][n+2] << " " << nodeft[p][n+3] << " " << std::endl;
+      ix[n/4][0] = nodeft[p][n];
+      ix[n/4][1] = nodeft[p][n+1];
+      ix[n/4][2] = nodeft[p][n+2];
+      ix[n/4][3] = nodeft[p][n+3];
     }
+    x.insert(planes[p],ix);
+    torch::Tensor ib = torch::zeros({dim});
+    batch.insert(planes[p],ib);
   }
 
+  auto edge_index_plane = torch::Dict<std::string, torch::Tensor>();
   for (size_t p=0;p<3;p++) {
     std::cout << "plane=" << p << std::endl;
     std::cout << "2d edge size=" << edge2d[p].size() << std::endl;
@@ -205,9 +221,17 @@ void TestInference::analyze(art::Event const& e)
     for (size_t n=0;n<edge2d[p].size();n++) {
       std::cout << edge2d[p][n].n2 << " ";
     }
+    long int dim = edge2d[p].size();
+    torch::Tensor ix = torch::zeros({2,dim});
+    for (size_t n=0;n<edge2d[p].size();n++) {
+      ix[0][n] = int(edge2d[p][n].n1);
+      ix[1][n] = int(edge2d[p][n].n2);
+    }
+    edge_index_plane.insert(planes[p],ix);
     std::cout << std::endl;
   }
 
+  auto edge_index_nexus = torch::Dict<std::string, torch::Tensor>();
   for (size_t p=0;p<3;p++) {
     std::cout << "plane=" << p << std::endl;
     std::cout << "3d edge size=" << edge3d[p].size() << std::endl;
@@ -218,9 +242,28 @@ void TestInference::analyze(art::Event const& e)
     for (size_t n=0;n<edge3d[p].size();n++) {
       std::cout << edge3d[p][n].n2 << " ";
     }
+    long int dim = edge3d[p].size();
+    torch::Tensor ix = torch::zeros({2,dim});
+    for (size_t n=0;n<edge3d[p].size();n++) {
+      ix[0][n] = int(edge3d[p][n].n1);
+      ix[1][n] = int(edge3d[p][n].n2);
+    }
+    edge_index_nexus.insert(planes[p],ix);
     std::cout << std::endl;
   }  
 
+  long int spdim = splist.size();
+  auto nexus = torch::empty({spdim,0});
+
+  std::vector<torch::jit::IValue> inputs;
+  inputs.push_back(x);
+  inputs.push_back(edge_index_plane);
+  inputs.push_back(edge_index_nexus);
+  inputs.push_back(nexus);
+  inputs.push_back(batch);
+  torch::jit::script::Module module = torch::jit::load("model.pt");
+  auto outputs = module.forward(inputs).toTuple();
+  std::cout << "output size=" << outputs->size() << std::endl;
 }
 
 DEFINE_ART_MODULE(TestInference)

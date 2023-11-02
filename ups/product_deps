@@ -33,14 +33,15 @@ flcdir  product_dir     fcl
 
 product          version
 larsoft      v09_78_04
+libtorch	v1_13_1b
 cetbuildtools    v7_12_01  -  only_for_build
 end_product_list
 
 # We now define allowed qualifiers and the corresponding qualifiers for the depdencies.
 # Make a table by adding columns before "notes". 
-qualifier      larsoft     notes
-e20:debug   e20:debug
-e20:prof    e20:prof
+qualifier      larsoft  libtorch   notes
+e20:debug   e20:debug   e20
+e20:prof    e20:prof    e20
 end_qualifier_list
 
 # Preserve tabs and formatting in emacs and vi / vim:
