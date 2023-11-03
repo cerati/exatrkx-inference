@@ -25,6 +25,8 @@
 #include "delaunator.hpp"
 
 #include <torch/script.h>
+#include <torchscatter/scatter.h>
+//#include <torchsparse/sparse.h>
 
 using std::array;
 using std::vector;
@@ -197,7 +199,7 @@ void TestInference::analyze(art::Event const& e)
   for (size_t p=0;p<3;p++) {
     std::cout << "plane=" << p << std::endl;
     long int dim = nodeft[p].size()/4;
-    torch::Tensor ix = torch::zeros({dim,4});
+    torch::Tensor ix = torch::zeros({dim,4},torch::dtype(torch::kFloat32));
     for (size_t n=0;n<nodeft[p].size();n=n+4) {
       std::cout << nodeft[p][n] << " " << nodeft[p][n+1] << " " << nodeft[p][n+2] << " " << nodeft[p][n+3] << " " << std::endl;
       ix[n/4][0] = nodeft[p][n];
@@ -206,7 +208,7 @@ void TestInference::analyze(art::Event const& e)
       ix[n/4][3] = nodeft[p][n+3];
     }
     x.insert(planes[p],ix);
-    torch::Tensor ib = torch::zeros({dim});
+    torch::Tensor ib = torch::zeros({dim},torch::dtype(torch::kInt64));
     batch.insert(planes[p],ib);
   }
 
@@ -222,7 +224,7 @@ void TestInference::analyze(art::Event const& e)
       std::cout << edge2d[p][n].n2 << " ";
     }
     long int dim = edge2d[p].size();
-    torch::Tensor ix = torch::zeros({2,dim});
+    torch::Tensor ix = torch::zeros({2,dim},torch::dtype(torch::kInt64));
     for (size_t n=0;n<edge2d[p].size();n++) {
       ix[0][n] = int(edge2d[p][n].n1);
       ix[1][n] = int(edge2d[p][n].n2);
@@ -243,7 +245,7 @@ void TestInference::analyze(art::Event const& e)
       std::cout << edge3d[p][n].n2 << " ";
     }
     long int dim = edge3d[p].size();
-    torch::Tensor ix = torch::zeros({2,dim});
+    torch::Tensor ix = torch::zeros({2,dim},torch::dtype(torch::kInt64));
     for (size_t n=0;n<edge3d[p].size();n++) {
       ix[0][n] = int(edge3d[p][n].n1);
       ix[1][n] = int(edge3d[p][n].n2);
@@ -253,7 +255,7 @@ void TestInference::analyze(art::Event const& e)
   }  
 
   long int spdim = splist.size();
-  auto nexus = torch::empty({spdim,0});
+  auto nexus = torch::empty({spdim,0},torch::dtype(torch::kInt64));
 
   std::vector<torch::jit::IValue> inputs;
   inputs.push_back(x);
@@ -262,8 +264,9 @@ void TestInference::analyze(art::Event const& e)
   inputs.push_back(nexus);
   inputs.push_back(batch);
   torch::jit::script::Module module = torch::jit::load("model.pt");
-  auto outputs = module.forward(inputs).toTuple();
-  std::cout << "output size=" << outputs->size() << std::endl;
+  std::cout << "FORWARD!" << std::endl;
+  auto outputs = module.forward(inputs).toGenericDict();
+  std::cout << "output =" << outputs << std::endl;
 }
 
 DEFINE_ART_MODULE(TestInference)
