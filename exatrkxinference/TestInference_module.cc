@@ -66,6 +66,8 @@ TestInference::TestInference(fhicl::ParameterSet const& p)
 
 void TestInference::analyze(art::Event const& e) 
 {
+  bool debug = 0;
+
   // Implementation of required member function here.
   // Get hits from the event record
   art::Handle< vector< Hit > > hitListHandle;
@@ -74,26 +76,28 @@ void TestInference::analyze(art::Event const& e)
     art::fill_ptr_vector(hitlist, hitListHandle);
   }
 
-  std::cout << "Hits size=" << hitlist.size() << std::endl;
+  if (debug) std::cout << "Hits size=" << hitlist.size() << std::endl;
   if (hitlist.size()<10) return;
 
   /*
+    normalization factors
     wire, time, integral, rms
-    norm p= u tensor([[389.0063, 173.4202, 144.4207,   4.5582],
-                      [148.0289,  78.8351, 223.8940,   2.2621]])
-    norm p= v tensor([[3.6914e+02, 1.7348e+02, 8.5748e+08, 4.4525e+00],
-                      [1.4525e+02, 8.1396e+01, 1.0625e+13, 1.9224e+00]])
-    norm p= y tensor([[547.3900, 173.1302, 109.5769,   4.1025],
-                      [284.2066,  74.4782, 108.9379,   1.4318]])
+    u [389.00632   173.42017   144.42065     4.5582113]
+      [148.02893    78.83508   223.89404     2.2621224]
+    v [3.6914261e+02 1.7347592e+02 8.5748262e+08 4.4525051e+00]
+      [1.4524565e+02 8.1395981e+01 1.0625440e+13 1.9223815e+00]
+    y [547.38995   173.13017   109.57691     4.1024675]
+      [284.20657    74.47823   108.93791     1.4318414]
    */
-  vector<std::array<double, 4> > avgs = {std::array<double, 4>{389.0063, 173.4202, 144.4207,   4.5582},
-                                         std::array<double, 4>{3.6914e+02, 1.7348e+02, 8.5748e+08, 4.4525e+00},
-                                         std::array<double, 4>{547.3900, 173.1302, 109.5769,   4.1025}  };
-  vector<std::array<double, 4> > devs = {std::array<double, 4>{148.0289,  78.8351, 223.8940,   2.2621},
-                                         std::array<double, 4>{1.4525e+02, 8.1396e+01, 1.0625e+13, 1.9224e+00},
-                                         std::array<double, 4>{284.2066,  74.4782, 108.9379,   1.4318}  };
+  vector<std::array<float, 4> > avgs = {std::array<float, 4>{389.00632, 173.42017, 144.42065, 4.5582113},
+					std::array<float, 4>{3.6914261e+02, 1.7347592e+02, 8.5748262e+08, 4.4525051e+00},
+					std::array<float, 4>{547.38995, 173.13017, 109.57691, 4.1024675}  };
+  vector<std::array<float, 4> > devs = {std::array<float, 4>{148.02893, 78.83508, 223.89404, 2.2621224},
+					std::array<float, 4>{1.4524565e+02, 8.1395981e+01, 1.0625440e+13, 1.9223815e+00},
+					std::array<float, 4>{284.20657, 74.47823, 108.93791, 1.4318414}  };
 
-  vector<vector<double> > nodeft(3,vector<double>());
+  vector<vector<float> > nodeft_bare(3,vector<float>());
+  vector<vector<float> > nodeft(3,vector<float>());
   vector<vector<double> > coords(3,vector<double>());
   vector<vector<size_t> > idsmap(3,vector<size_t>());
   vector<size_t> idsmapRev(hitlist.size(),hitlist.size());
@@ -106,6 +110,10 @@ void TestInference::analyze(art::Event const& e)
     nodeft[h->View()].push_back( (h->PeakTime()*0.055  - avgs[h->View()][1]) / devs[h->View()][1] );
     nodeft[h->View()].push_back( (h->Integral()        - avgs[h->View()][2]) / devs[h->View()][2] );
     nodeft[h->View()].push_back( (h->RMS()             - avgs[h->View()][3]) / devs[h->View()][3] );
+    nodeft_bare[h->View()].push_back( h->WireID().Wire*0.3 );
+    nodeft_bare[h->View()].push_back( h->PeakTime()*0.055 );
+    nodeft_bare[h->View()].push_back( h->Integral() );
+    nodeft_bare[h->View()].push_back( h->RMS() );
   }
 
   struct Edge {
@@ -118,12 +126,11 @@ void TestInference::analyze(art::Event const& e)
   };
   vector<vector<Edge> > edge2d(3,vector<Edge>());
   for (size_t p=0; p<3; p++) {
-    std::cout << "Plane " << p << " has N hits=" << coords[p].size()/2 << std::endl;
+    if (debug) std::cout << "Plane " << p << " has N hits=" << coords[p].size()/2 << std::endl;
     if (coords[p].size()/2<3) continue;
     delaunator::Delaunator d(coords[p]);
-    std::cout << "Found N triangles=" << d.triangles.size()/3 << std::endl;
+    if (debug) std::cout << "Found N triangles=" << d.triangles.size()/3 << std::endl;
     for(std::size_t i = 0; i < d.triangles.size(); i+=3) {
-      //std::cout << "Triangle bewteen points with ids=" << d.triangles[i] << " " << d.triangles[i + 1] << " " << d.triangles[i + 2] << std::endl;
       //create edges in both directions
       Edge e;
       e.n1 = d.triangles[i];
@@ -152,11 +159,6 @@ void TestInference::analyze(art::Event const& e)
     std::sort(edge2d[p].begin(),edge2d[p].end(),[](const auto& i, const auto& j){return (i.n1!=j.n1 ? i.n1 < j.n1 : i.n2 < j.n2);});
     edge2d[p].erase( std::unique( edge2d[p].begin(), edge2d[p].end() ), edge2d[p].end() );
   }
-  // vector<vector<size_t> > edge_idx_plane(3);
-  // for (size_t p=0; p<3; p++) {
-  //   edge_idx_plane[p] = vector<size_t>(edgen1[p].begin(),edgen1[p].end());
-  //   edge_idx_plane[p].insert(edge_idx_plane[p].end()-1, edgen2[p].begin(),edgen2[p].end());
-  // }
 
   // Get spacepoints from the event record
   art::Handle< vector< SpacePoint > > spListHandle;
@@ -185,23 +187,24 @@ void TestInference::analyze(art::Event const& e)
     }
   }
 
-  // //torch.Size([2, N]) first dimension is the plane hit id, second is the sp id
-  // vector<std::vector<size_t> > edge_idx_nexus(3);
-  // for (size_t p=0; p<3; p++) {
-  //   edge_idx_nexus[p] = vector<size_t>(edgen2D[p].begin(),edgen2D[p].end());
-  //   edge_idx_nexus[p].insert(edge_idx_nexus[p].end()-1, edgen3D[p].begin(),edgen3D[p].end());
-  // }
-
   std::string planes[3] = {"u","v","y"};
 
   auto x = torch::Dict<std::string, torch::Tensor>();
   auto batch = torch::Dict<std::string, torch::Tensor>();
   for (size_t p=0;p<3;p++) {
-    std::cout << "plane=" << p << std::endl;
+    if (debug) std::cout << "plane=" << p << std::endl;
     long int dim = nodeft[p].size()/4;
     torch::Tensor ix = torch::zeros({dim,4},torch::dtype(torch::kFloat32));
+    if (debug) std::cout << std::fixed;
+    if (debug) std::cout << std::setprecision(4);
+    if (debug) std::cout << "before, plane=" << planes[p] << std::endl;
+    for (size_t n=0;n<nodeft_bare[p].size();n=n+4) {
+      if (debug) std::cout << nodeft_bare[p][n] << " " << nodeft_bare[p][n+1] << " " << nodeft_bare[p][n+2] << " " << nodeft_bare[p][n+3] << " " << std::endl;
+    }
+    if (debug) std::cout << std::scientific;
+    if (debug) std::cout << "after, plane=" << planes[p] << std::endl;
     for (size_t n=0;n<nodeft[p].size();n=n+4) {
-      std::cout << nodeft[p][n] << " " << nodeft[p][n+1] << " " << nodeft[p][n+2] << " " << nodeft[p][n+3] << " " << std::endl;
+      if (debug) std::cout << nodeft[p][n] << " " << nodeft[p][n+1] << " " << nodeft[p][n+2] << " " << nodeft[p][n+3] << " " << std::endl;
       ix[n/4][0] = nodeft[p][n];
       ix[n/4][1] = nodeft[p][n+1];
       ix[n/4][2] = nodeft[p][n+2];
@@ -214,14 +217,14 @@ void TestInference::analyze(art::Event const& e)
 
   auto edge_index_plane = torch::Dict<std::string, torch::Tensor>();
   for (size_t p=0;p<3;p++) {
-    std::cout << "plane=" << p << std::endl;
-    std::cout << "2d edge size=" << edge2d[p].size() << std::endl;
+    if (debug) std::cout << "plane=" << p << std::endl;
+    if (debug) std::cout << "2d edge size=" << edge2d[p].size() << std::endl;
     for (size_t n=0;n<edge2d[p].size();n++) {
-      std::cout << edge2d[p][n].n1 << " ";
+      if (debug) std::cout << edge2d[p][n].n1 << " ";
     }
-    std::cout << std::endl;
+    if (debug) std::cout << std::endl;
     for (size_t n=0;n<edge2d[p].size();n++) {
-      std::cout << edge2d[p][n].n2 << " ";
+      if (debug) std::cout << edge2d[p][n].n2 << " ";
     }
     long int dim = edge2d[p].size();
     torch::Tensor ix = torch::zeros({2,dim},torch::dtype(torch::kInt64));
@@ -230,19 +233,19 @@ void TestInference::analyze(art::Event const& e)
       ix[1][n] = int(edge2d[p][n].n2);
     }
     edge_index_plane.insert(planes[p],ix);
-    std::cout << std::endl;
+    if (debug) std::cout << std::endl;
   }
 
   auto edge_index_nexus = torch::Dict<std::string, torch::Tensor>();
   for (size_t p=0;p<3;p++) {
-    std::cout << "plane=" << p << std::endl;
-    std::cout << "3d edge size=" << edge3d[p].size() << std::endl;
+    if (debug) std::cout << "plane=" << p << std::endl;
+    if (debug) std::cout << "3d edge size=" << edge3d[p].size() << std::endl;
     for (size_t n=0;n<edge3d[p].size();n++) {
-      std::cout << edge3d[p][n].n1 << " ";
+      if (debug) std::cout << edge3d[p][n].n1 << " ";
     }
-    std::cout << std::endl;
+    if (debug) std::cout << std::endl;
     for (size_t n=0;n<edge3d[p].size();n++) {
-      std::cout << edge3d[p][n].n2 << " ";
+      if (debug) std::cout << edge3d[p][n].n2 << " ";
     }
     long int dim = edge3d[p].size();
     torch::Tensor ix = torch::zeros({2,dim},torch::dtype(torch::kInt64));
@@ -251,11 +254,11 @@ void TestInference::analyze(art::Event const& e)
       ix[1][n] = int(edge3d[p][n].n2);
     }
     edge_index_nexus.insert(planes[p],ix);
-    std::cout << std::endl;
-  }  
+    if (debug) std::cout << std::endl;
+  }
 
   long int spdim = splist.size();
-  auto nexus = torch::empty({spdim,0},torch::dtype(torch::kInt64));
+  auto nexus = torch::empty({spdim,0},torch::dtype(torch::kFloat32));
 
   std::vector<torch::jit::IValue> inputs;
   inputs.push_back(x);
@@ -264,7 +267,7 @@ void TestInference::analyze(art::Event const& e)
   inputs.push_back(nexus);
   inputs.push_back(batch);
   torch::jit::script::Module module = torch::jit::load("model.pt");
-  std::cout << "FORWARD!" << std::endl;
+  if (debug) std::cout << "FORWARD!" << std::endl;
   auto outputs = module.forward(inputs).toGenericDict();
   std::cout << "output =" << outputs << std::endl;
 }
