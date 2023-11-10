@@ -269,7 +269,26 @@ void TestInference::analyze(art::Event const& e)
   torch::jit::script::Module module = torch::jit::load("model.pt");
   if (debug) std::cout << "FORWARD!" << std::endl;
   auto outputs = module.forward(inputs).toGenericDict();
-  std::cout << "output =" << outputs << std::endl;
+  if (debug) std::cout << "output =" << outputs << std::endl;
+  auto s_u = outputs.at("x_semantic").toGenericDict().at("u").toTensor();
+  auto s_v = outputs.at("x_semantic").toGenericDict().at("v").toTensor();
+  auto s_y = outputs.at("x_semantic").toGenericDict().at("y").toTensor();
+  for (int j=0;j<5;j++) {
+    std::cout <<"x_semantic category=" << j << " : ";
+    for (int i = 0; i < s_u.sizes()[0]; ++i) std::cout << s_u[i][j].item<float>() << ", ";
+    for (int i = 0; i < s_v.sizes()[0]; ++i) std::cout << s_v[i][j].item<float>() << ", ";
+    for (int i = 0; i < s_y.sizes()[0]; ++i) std::cout << s_y[i][j].item<float>() << ", ";
+    std::cout << std::endl;
+  }
+  //
+  auto f_u = outputs.at("x_filter").toGenericDict().at("u").toTensor();
+  auto f_v = outputs.at("x_filter").toGenericDict().at("v").toTensor();
+  auto f_y = outputs.at("x_filter").toGenericDict().at("y").toTensor();
+    std::cout <<"x_filter : ";
+  for (int i = 0; i < f_u.numel(); ++i) std::cout << f_u[i].item<float>() << ", ";
+  for (int i = 0; i < f_v.numel(); ++i) std::cout << f_v[i].item<float>() << ", ";
+  for (int i = 0; i < f_y.numel(); ++i) std::cout << f_y[i].item<float>() << ", ";
+  std::cout << std::endl;
 }
 
 DEFINE_ART_MODULE(TestInference)
